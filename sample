@@ -1,0 +1,297 @@
+import React, { useState, useEffect } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "/components/ui/avatar";
+import { Button } from "/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "/components/ui/card";
+import { Input } from "/components/ui/input";
+import { Label } from "/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { LineChart, XAxis, YAxis, Tooltip, Legend, Line } from "recharts";
+
+const PortfolioTracker = () => {
+  const [stocks, setStocks] = useState([]);
+  const [newStock, setNewStock] = useState({ ticker: "", quantity: 1, buyPrice: 0 });
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [topPerformingStock, setTopPerformingStock] = useState(null);
+  const [portfolioDistribution, setPortfolioDistribution] = useState([]);
+
+  useEffect(() => {
+    fetchStocks();
+  }, []);
+
+  useEffect(() => {
+    calculatePortfolioValue();
+    calculateTopPerformingStock();
+    calculatePortfolioDistribution();
+  }, [stocks]);
+
+  const fetchStocks = async () => {
+    try {
+      const response = await fetch("/api/stocks");
+      const data = await response.json();
+      setStocks(data);
+    } catch (error) {
+      console.error("Error fetching stocks:", error);
+    }
+  };
+
+  const addStock = async () => {
+    try {
+      const response = await fetch("/api/stocks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newStock),
+      });
+      if (response.ok) {
+        fetchStocks();
+        setNewStock({ ticker: "", quantity: 1, buyPrice: 0 });
+      }
+    } catch (error) {
+      console.error("Error adding stock:", error);
+    }
+  };
+
+  const updateStock = async (id, updatedStock) => {
+    try {
+      const response = await fetch(`/api/stocks/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedStock),
+      });
+      if (response.ok) {
+        fetchStocks();
+      }
+    } catch (error) {
+      console.error("Error updating stock:", error);
+    }
+  };
+
+  const deleteStock = async (id) => {
+    try {
+      const response = await fetch(`/api/stocks/${id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        fetchStocks();
+      }
+    } catch (error) {
+      console.error("Error deleting stock:", error);
+    }
+  };
+
+  const calculatePortfolioValue = async () => {
+    let totalValue = 0;
+    for (const stock of stocks) {
+      try {
+        const response = await fetch(`/api/stock-price/${stock.ticker}`);
+        const data = await response.json();
+        totalValue += data.price * stock.quantity;
+      } catch (error) {
+        console.error("Error fetching stock price:", error);
+      }
+    }
+    setPortfolioValue(totalValue);
+  };
+
+  const calculateTopPerformingStock = async () => {
+    let topStock = null;
+    let maxPerformance = -Infinity;
+    for (const stock of stocks) {
+      try {
+        const response = await fetch(`/api/stock-price/${stock.ticker}`);
+        const data = await response.json();
+        const performance = (data.price - stock.buyPrice) / stock.buyPrice;
+        if (performance > maxPerformance) {
+          maxPerformance = performance;
+          topStock = stock;
+        }
+      } catch (error) {
+        console.error("Error fetching stock price:", error);
+      }
+    }
+    setTopPerformingStock(topStock);
+  };
+
+  const calculatePortfolioDistribution = () => {
+    const distribution = stocks.map((stock) => ({
+      name: stock.ticker,
+      value: stock.quantity,
+    }));
+    setPortfolioDistribution(distribution);
+  };
+
+  return (
+    <div className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Portfolio Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Total Portfolio Value</p>
+                <p className="text-sm font-medium">${portfolioValue.toFixed(2)}</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Top Performing Stock</p>
+                <p className="text-sm font-medium">
+                  {topPerformingStock ? topPerformingStock.ticker : "N/A"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4">
+              <LineChart
+                width={500}
+                height={300}
+                data={portfolioDistribution}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="value" stroke="#8884d8" />
+              </LineChart>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Add/Edit Stock</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col space-y-2">
+              <div className="flex flex-col space-y-1">
+                <Label htmlFor="ticker">Ticker</Label>
+                <Input
+                  id="ticker"
+                  value={newStock.ticker}
+                  onChange={(e) =>
+                    setNewStock({ ...newStock, ticker: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={newStock.quantity}
+                  onChange={(e) =>
+                    setNewStock({ ...newStock, quantity: parseInt(e.target.value) })
+                  }
+                />
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label htmlFor="buyPrice">Buy Price</Label>
+                <Input
+                  id="buyPrice"
+                  type="number"
+                  step="0.01"
+                  value={newStock.buyPrice}
+                  onChange={(e) =>
+                    setNewStock({ ...newStock, buyPrice: parseFloat(e.target.value) })
+                  }
+                />
+              </div>
+              <Button onClick={addStock}>Add Stock</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Stock Holdings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-left text-sm text-gray-500">
+              <thead className="bg-gray-50 text-xs text-gray-700 uppercase">
+                <tr>
+                  <th scope="col" className="px-6 py-3">
+                    Ticker
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Quantity
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Buy Price
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Current Price
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {stocks.map((stock) => (
+                  <tr key={stock.id} className="bg-white border-b">
+                    <td className="px-6 py-4">{stock.ticker}</td>
+                    <td className="px-6 py-4">{stock.quantity}</td>
+                    <td className="px-6 py-4">${stock.buyPrice.toFixed(2)}</td>
+                    <td className="px-6 py-4">
+                      {stock.currentPrice ? `$${stock.currentPrice.toFixed(2)}` : "N/A"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          updateStock(stock.id, {
+                            ...stock,
+                            quantity: stock.quantity + 1,
+                          })
+                        }
+                      >
+                        +
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          updateStock(stock.id, {
+                            ...stock,
+                            quantity: stock.quantity - 1,
+                          })
+                        }
+                      >
+                        -
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => deleteStock(stock.id)}
+                      >
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default PortfolioTracker;
